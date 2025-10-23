@@ -2,7 +2,7 @@ name: CI - build & update kustomize
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
     paths-ignore:
       - "manifests/production/**"
   workflow_dispatch:
@@ -26,9 +26,7 @@ jobs:
           mkdir -p static/css static/js
           if [ ! -f "static/css/style.css" ]; then
             echo "Creating default CSS..."
-            cat > static/css/style.css << EOCSS
-body { margin: 0; padding: 20px; font-family: sans-serif; }
-EOCSS
+            echo "body { margin: 0; padding: 20px; font-family: sans-serif; }" > static/css/style.css
           fi
           if [ ! -f "static/js/app.js" ]; then
             echo "// Default app.js" > static/js/app.js
