@@ -18,5 +18,5 @@ COPY templates/ ./templates/
 RUN mkdir -p ./static/css ./static/js
 COPY static/ ./static/
 
-EXPOSE 8080
+EXPOSE 8090
 CMD ["./main"]

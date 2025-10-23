@@ -29,7 +29,7 @@ kubectl create secret docker-registry $SECRET_NAME \
   --docker-password=$GITHUB_TOKEN
 
 # Dodaj imagePullSecrets do service account
-kubectl patch serviceaccount $IMAGE_NAME-sa -n $NAMESPACE --type='json' -p='[{"op": "add", "path": "/imagePullSecrets", "value": [{"name": "ghcr-pull-secret"}]}]'
+kubectl patch serviceaccount website-argocd-k8s-githubactions-kustomize-kyverno05-sa -n $NAMESPACE --type='json' -p='[{"op": "add", "path": "/imagePullSecrets", "value": [{"name": "ghcr-pull-secret"}]}]'
 
 echo "✅ GHCR secret utworzony pomyślnie!"
 echo "🔍 Sprawdź secret: kubectl get secret $SECRET_NAME -n $NAMESPACE -o yaml"

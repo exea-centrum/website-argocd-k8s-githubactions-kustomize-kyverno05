@@ -4,7 +4,7 @@ Kompleksowe rozwiązanie DevOps z pełnym pipeline CI/CD, monitoringiem i polity
 
 ## 📋 Architektura
 
-- **Aplikacja**: Go + PostgreSQL
+- **Aplikacja**: Go + PostgreSQL (port 8090)
 - **CI/CD**: GitHub Actions + ArgoCD
 - **Infrastruktura**: Kubernetes + Kustomize
 - **Bezpieczeństwo**: Kyverno Policies
@@ -21,40 +21,35 @@ website-argocd-k8s-githubactions-kustomize-kyverno05/
 ├── manifests/             # Manifesty K8s
 │   ├── base/              # Bazowe manifesty
 │   └── production/        # Overlay production
+│       └── monitoring/    # Stack monitoringu
 ├── .github/workflows/     # GitHub Actions
 ├── argocd/               # Konfiguracja ArgoCD
-├── policies/             # Polityky Kyverno
-└── monitoring/           # Stack monitoringu
+└── policies/             # Polityky Kyverno
 ```
 
-## ⚙️ Szybkie uruchomienie
+## 🚀 Szybki Deployment
 
-### 1. Inicjalizacja
+### 1. Utwórz repozytorium GitHub
 ```bash
-git clone https://github.com/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05.git
-cd website-argocd-k8s-githubactions-kustomize-kyverno05
+# Utwórz puste repozytorium: https://github.com/new
+# Nazwa: website-argocd-k8s-githubactions-kustomize-kyverno05
 ```
 
-### 2. Instalacja ArgoCD na MicroK8s
+### 2. Inicjalizacja projektu
 ```bash
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+git add .
+git commit -m "Initial commit: Full DevOps pipeline with monitoring"
+git remote add origin https://github.com/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05.git
+git push -u origin main
 ```
 
-### 3. Konfiguracja GHCR
+### 3. Automatyczny deployment
 ```bash
-./setup-ghcr-secret.sh <github-username> <github-token>
-```
+# Skonfiguruj secret GHCR
+./setup-ghcr-secret.sh <github-username> <token>
 
-### 4. Deploy aplikacji przez ArgoCD
-```bash
-kubectl apply -f argocd/application.yaml
-```
-
-### 5. Dostęp do ArgoCD
-```bash
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-# Login: admin, Hasło: kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+# Automatyczny deployment
+./deploy-with-argocd.sh
 ```
 
 ## 🔧 Konfiguracja
@@ -65,7 +60,7 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 - `DB_USER`: Użytkownik bazy
 - `DB_PASSWORD`: Hasło bazy
 - `DB_NAME`: Nazwa bazy
-- `PORT`: Port aplikacji (domyślnie 8080)
+- `PORT`: Port aplikacji (8090)
 
 ### Endpointy
 - `/`: Strona główna
@@ -87,26 +82,20 @@ Polityki Kyverno:
 - Blokada namespace `default`
 - Wymagane limity zasobów
 
-## 🚀 GitHub Actions
+## 🛠️ Rozwiązywanie problemów
 
-Pipeline automatycznie:
-1. Buduje obraz Dockera
-2. Push do GHCR  
-3. Aktualizuje Kustomize
-4. ArgoCD automatycznie deployuje na MicroK8s
+```bash
+# Sprawdź status podów
+kubectl get pods -n davtrografanalokitempo
+kubectl get pods -n monitoring
 
-## 📝 Logowanie
+# Sprawdź logi aplikacji
+kubectl logs -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05
 
-Logi dostępne przez `kubectl logs`
+# Sprawdź status ArgoCD
+argocd app get website-argocd-k8s-githubactions-kustomize-kyverno05-app
 
-## 🤝 Contributing
-
-1. Fork the project
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## 📄 Licencja
-
-MIT License - szczegóły w pliku LICENSE.
+# Czyszczenie
+kubectl delete -f argocd/application.yaml
+kubectl delete namespace davtrografanalokitempo monitoring
+```
