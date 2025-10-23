@@ -5,10 +5,10 @@ namespace: davtrografanalokitempo
 
 resources:
   - ../base
-  - monitoring/monitoring-namespace.yaml
   - monitoring/prometheus.yaml
   - monitoring/grafana.yaml
   - monitoring/loki.yaml
+  - monitoring/tempo-config.yaml
   - monitoring/tempo.yaml
 
 images:

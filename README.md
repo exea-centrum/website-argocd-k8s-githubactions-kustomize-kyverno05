@@ -87,15 +87,14 @@ Polityki Kyverno:
 ```bash
 # Sprawdź status podów
 kubectl get pods -n davtrografanalokitempo
-kubectl get pods -n monitoring
 
 # Sprawdź logi aplikacji
 kubectl logs -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05
 
 # Sprawdź status ArgoCD
-argocd app get website-argocd-k8s-githubactions-kustomize-kyverno05-app
+kubectl get applications -n argocd
 
 # Czyszczenie
 kubectl delete -f argocd/application.yaml
-kubectl delete namespace davtrografanalokitempo monitoring
+kubectl delete namespace davtrografanalokitempo
 ```

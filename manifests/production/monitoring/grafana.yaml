@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana
-  namespace: monitoring
+  namespace: davtrografanalokitempo
   labels:
     app: grafana
 spec:
@@ -35,7 +35,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grafana-service
-  namespace: monitoring
+  namespace: davtrografanalokitempo
 spec:
   selector:
     app: grafana

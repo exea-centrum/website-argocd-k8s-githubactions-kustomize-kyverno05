@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: tempo
-  namespace: monitoring
+  namespace: davtrografanalokitempo
   labels:
     app: tempo
 spec:
@@ -21,7 +21,10 @@ spec:
         ports:
         - containerPort: 3200
         args:
-        - -config.file=/etc/tempo.yaml
+        - -config.file=/etc/tempo/tempo.yaml
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/tempo
         resources:
           requests:
             memory: "128Mi"
@@ -29,12 +32,16 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+      volumes:
+      - name: config-volume
+        configMap:
+          name: tempo-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: tempo-service
-  namespace: monitoring
+  namespace: davtrografanalokitempo
 spec:
   selector:
     app: tempo

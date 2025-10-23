@@ -78,7 +78,7 @@ func initDB() error {
 		DBUser:     getEnv("DB_USER", "davtro"),
 		DBPassword: getEnv("DB_PASSWORD", "password123"),
 		DBName:     getEnv("DB_NAME", "davtro_db"),
-		Port:       getEnv("PORT", "8090"),  // ZMIENIONE NA 8090
+		Port:       getEnv("PORT", "8090"),
 	}
 	
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",

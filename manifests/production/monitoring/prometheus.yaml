@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: prometheus
-  namespace: monitoring
+  namespace: davtrografanalokitempo
   labels:
     app: prometheus
 spec:
@@ -39,7 +39,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: prometheus-service
-  namespace: monitoring
+  namespace: davtrografanalokitempo
 spec:
   selector:
     app: prometheus
@@ -52,7 +52,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: prometheus-config
-  namespace: monitoring
+  namespace: davtrografanalokitempo
 data:
   prometheus.yml: |
     global:
