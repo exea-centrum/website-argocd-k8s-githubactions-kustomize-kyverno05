@@ -71,7 +71,7 @@ git push -u origin main
 ## 📊 Monitoring
 
 - **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000 (admin/admin)
+- **Grafana**: http://localhost:3001 (admin/admin)
 - **Loki**: http://localhost:3100
 - **Tempo**: http://localhost:3200
 

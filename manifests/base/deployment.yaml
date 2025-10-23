@@ -24,8 +24,19 @@ spec:
       serviceAccountName: website-argocd-k8s-githubactions-kustomize-kyverno05-sa
       initContainers:
       - name: wait-for-db
-        image: busybox:1.35
-        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for database; sleep 2; done; echo Database is ready!']
+        image: postgres:15
+        command: 
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-service -p 5432 -U davtro; do
+            echo "Waiting for database...";
+            sleep 2;
+          done;
+          echo "Database is ready!"
+        env:
+        - name: PGPASSWORD
+          value: "password123"
       containers:
       - name: website
         image: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05:latest
@@ -44,6 +55,18 @@ spec:
           value: "password123"
         - name: DB_NAME
           value: "davtro_db"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 5
         resources:
           requests:
             memory: "64Mi"

@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -97,17 +98,66 @@ func initDB() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	createTable := `
-	CREATE TABLE IF NOT EXISTS scraped_data (
-		id SERIAL PRIMARY KEY,
-		title TEXT NOT NULL,
-		content TEXT NOT NULL,
-		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+	// SPRAWDŹ CZY TABELA JUŻ ISTNIEJE PRZED UTWORZENIEM
+	var tableExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'scraped_data'
+		)
+	`).Scan(&tableExists)
 	
-	_, err = db.Exec(createTable)
 	if err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
+		log.Printf("Warning: failed to check if table exists: %v", err)
+		// Kontynuuj próbę utworzenia tabeli
+		tableExists = false
+	}
+
+	// UTWÓRZ TABELĘ TYLKO JEŚLI NIE ISTNIEJE
+	if !tableExists {
+		createTable := `
+		CREATE TABLE scraped_data (
+			id SERIAL PRIMARY KEY,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`
+		
+		_, err = db.Exec(createTable)
+		if err != nil {
+			// Jeśli błąd dotyczy już istniejącej tabeli lub sekwencji, zignoruj go
+			if strings.Contains(err.Error(), "already exists") {
+				log.Println("Table or sequence already exists, continuing...")
+			} else {
+				return fmt.Errorf("failed to create table: %w", err)
+			}
+		} else {
+			log.Println("Table 'scraped_data' created successfully")
+		}
+	} else {
+		log.Println("Table 'scraped_data' already exists, skipping creation")
+	}
+
+	// DODAJ PRZYKŁADOWE DANE JEŚLI TABELA JEST PUSTA
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM scraped_data").Scan(&count)
+	if err == nil && count == 0 {
+		sampleData := []string{
+			"INSERT INTO scraped_data (title, content) VALUES ('Welcome', 'Welcome to Davtro Website with full DevOps stack!')",
+			"INSERT INTO scraped_data (title, content) VALUES ('Monitoring', 'Prometheus, Grafana, Loki and Tempo are integrated')",
+			"INSERT INTO scraped_data (title, content) VALUES ('ArgoCD', 'GitOps continuous deployment is enabled')",
+			"INSERT INTO scraped_data (title, content) VALUES ('Kubernetes', 'Running on Kubernetes with Kustomize')",
+			"INSERT INTO scraped_data (title, content) VALUES ('GitHub Actions', 'CI/CD pipeline with GitHub Actions')",
+		}
+		
+		for _, query := range sampleData {
+			_, err = db.Exec(query)
+			if err != nil {
+				log.Printf("Warning: failed to insert sample data: %v", err)
+			}
+		}
+		log.Println("Sample data inserted successfully")
 	}
 
 	dbConnectionStatus.Set(1)

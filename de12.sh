@@ -62,7 +62,7 @@ git init
 
 mkdir -p src templates static/css static/js manifests/base manifests/production/monitoring .github/workflows argocd policies
 
-# 1. Tworzenie plików Go
+# 1. Tworzenie plików Go - POPRAWIONE (bez błędów bazy danych)
 print_step "Tworzenie aplikacji Go..."
 
 cat > src/main.go << 'EOF'
@@ -76,6 +76,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -165,17 +166,66 @@ func initDB() error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	createTable := `
-	CREATE TABLE IF NOT EXISTS scraped_data (
-		id SERIAL PRIMARY KEY,
-		title TEXT NOT NULL,
-		content TEXT NOT NULL,
-		created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
+	// SPRAWDŹ CZY TABELA JUŻ ISTNIEJE PRZED UTWORZENIEM
+	var tableExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS (
+			SELECT FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = 'scraped_data'
+		)
+	`).Scan(&tableExists)
 	
-	_, err = db.Exec(createTable)
 	if err != nil {
-		return fmt.Errorf("failed to create table: %w", err)
+		log.Printf("Warning: failed to check if table exists: %v", err)
+		// Kontynuuj próbę utworzenia tabeli
+		tableExists = false
+	}
+
+	// UTWÓRZ TABELĘ TYLKO JEŚLI NIE ISTNIEJE
+	if !tableExists {
+		createTable := `
+		CREATE TABLE scraped_data (
+			id SERIAL PRIMARY KEY,
+			title TEXT NOT NULL,
+			content TEXT NOT NULL,
+			created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);`
+		
+		_, err = db.Exec(createTable)
+		if err != nil {
+			// Jeśli błąd dotyczy już istniejącej tabeli lub sekwencji, zignoruj go
+			if strings.Contains(err.Error(), "already exists") {
+				log.Println("Table or sequence already exists, continuing...")
+			} else {
+				return fmt.Errorf("failed to create table: %w", err)
+			}
+		} else {
+			log.Println("Table 'scraped_data' created successfully")
+		}
+	} else {
+		log.Println("Table 'scraped_data' already exists, skipping creation")
+	}
+
+	// DODAJ PRZYKŁADOWE DANE JEŚLI TABELA JEST PUSTA
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM scraped_data").Scan(&count)
+	if err == nil && count == 0 {
+		sampleData := []string{
+			"INSERT INTO scraped_data (title, content) VALUES ('Welcome', 'Welcome to Davtro Website with full DevOps stack!')",
+			"INSERT INTO scraped_data (title, content) VALUES ('Monitoring', 'Prometheus, Grafana, Loki and Tempo are integrated')",
+			"INSERT INTO scraped_data (title, content) VALUES ('ArgoCD', 'GitOps continuous deployment is enabled')",
+			"INSERT INTO scraped_data (title, content) VALUES ('Kubernetes', 'Running on Kubernetes with Kustomize')",
+			"INSERT INTO scraped_data (title, content) VALUES ('GitHub Actions', 'CI/CD pipeline with GitHub Actions')",
+		}
+		
+		for _, query := range sampleData {
+			_, err = db.Exec(query)
+			if err != nil {
+				log.Printf("Warning: failed to insert sample data: %v", err)
+			}
+		}
+		log.Println("Sample data inserted successfully")
 	}
 
 	dbConnectionStatus.Set(1)
@@ -641,7 +691,7 @@ metadata:
     version: v1
 EOF
 
-# Deployment
+# Deployment - POPRAWIONE (z health checks)
 cat > manifests/base/deployment.yaml << EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -669,8 +719,19 @@ spec:
       serviceAccountName: $IMAGE_NAME-sa
       initContainers:
       - name: wait-for-db
-        image: busybox:1.35
-        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for database; sleep 2; done; echo Database is ready!']
+        image: postgres:15
+        command: 
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-service -p 5432 -U davtro; do
+            echo "Waiting for database...";
+            sleep 2;
+          done;
+          echo "Database is ready!"
+        env:
+        - name: PGPASSWORD
+          value: "password123"
       containers:
       - name: website
         image: ghcr.io/$REPO_OWNER/$IMAGE_NAME:latest
@@ -689,6 +750,18 @@ spec:
           value: "password123"
         - name: DB_NAME
           value: "davtro_db"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 5
         resources:
           requests:
             memory: "64Mi"
@@ -745,7 +818,7 @@ spec:
               number: 80
 EOF
 
-# PostgreSQL
+# PostgreSQL - POPRAWIONE (z PersistentVolume)
 cat > manifests/base/postgres.yaml << EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -790,7 +863,8 @@ spec:
             cpu: "200m"
       volumes:
       - name: postgres-data
-        emptyDir: {}
+        persistentVolumeClaim:
+          claimName: postgres-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -808,6 +882,18 @@ spec:
     targetPort: 5432
     protocol: TCP
   type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: $NAMESPACE
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 EOF
 
 # Secrets
@@ -1081,7 +1167,7 @@ spec:
   type: ClusterIP
 EOF
 
-# Tempo
+# Tempo - POPRAWIONE (z ConfigMap)
 cat > manifests/production/monitoring/tempo.yaml << EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -1233,7 +1319,7 @@ EOF
 
 chmod +x setup-ghcr-secret.sh
 
-# 9. Skrypt automatycznego deploymentu - POPRAWIONY
+# 9. Skrypt automatycznego deploymentu - POPRAWIONY (z dynamicznymi portami)
 print_step "Tworzenie skryptu automatycznego deploymentu..."
 
 cat > deploy-with-argocd.sh << 'EOF'
@@ -1253,7 +1339,34 @@ print_success() { echo -e "${GREEN}✅${NC} $1"; }
 print_warning() { echo -e "${YELLOW}⚠️${NC} $1"; }
 print_error() { echo -e "${RED}❌${NC} $1"; }
 
+# Funkcja do sprawdzania wolnych portów
+find_free_port() {
+    local base_port=$1
+    local port=$base_port
+    while netstat -tuln | grep -q ":$port "; do
+        port=$((port + 1))
+        if [ $port -gt $((base_port + 20)) ]; then
+            echo $base_port
+            return
+        fi
+    done
+    echo $port
+}
+
 echo "🚀 Automatyczny deployment aplikacji przez ArgoCD..."
+
+# Znajdź wolne porty
+APP_PORT=$(find_free_port 8081)
+GRAFANA_PORT=$(find_free_port 3001)
+PROMETHEUS_PORT=9090  # Zwykle wolny
+LOKI_PORT=3100        # Zwykle wolny  
+TEMPO_PORT=3200       # Zwykle wolny
+
+print_step "Używanie portów: App:$APP_PORT, Grafana:$GRAFANA_PORT, Prometheus:$PROMETHEUS_PORT, Loki:$LOKI_PORT, Tempo:$TEMPO_PORT"
+
+# Zatrzymaj istniejące port-forward
+pkill -f "kubectl port-forward" || true
+sleep 2
 
 # Sprawdź czy ArgoCD jest dostępny
 if ! kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server &> /dev/null; then
@@ -1295,70 +1408,104 @@ fi
 print_step "Sprawdzanie statusu podów..."
 timeout=300
 counter=0
-all_running=false
+all_healthy=false
 
 while [ $counter -lt $timeout ]; do
-    RUNNING_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 2>/dev/null | grep Running | wc -l)
-    TOTAL_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 2>/dev/null | grep -v NAME | wc -l)
+    # Sprawdź czy wszystkie pody aplikacji są gotowe
+    READY_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 -o jsonpath='{range .items[*]}{.status.containerStatuses[?(@.ready==true)].ready}{"\n"}{end}' | grep -c true)
+    TOTAL_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 --no-headers | wc -l)
     
-    if [ "$RUNNING_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -ge 1 ]; then
-        all_running=true
-        print_success "Aplikacja uruchomiona!"
-        break
+    if [ "$READY_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -ge 1 ]; then
+        # Sprawdź czy aplikacja odpowiada na health check
+        POD_NAME=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 -o name | head -1 | cut -d'/' -f2)
+        if kubectl exec -n davtrografanalokitempo $POD_NAME -- wget -q -T 5 -O- http://localhost:8090/health >/dev/null 2>&1; then
+            all_healthy=true
+            print_success "Aplikacja uruchomiona i odpowiada!"
+            break
+        fi
     fi
     echo "⏳ Oczekiwanie na uruchomienie aplikacji... ($counter/$timeout)"
     sleep 10
     counter=$((counter + 10))
 done
 
-if [ "$all_running" = false ]; then
-    print_warning "Timeout - sprawdzam status podów..."
+if [ "$all_healthy" = false ]; then
+    print_warning "Timeout - sprawdzam status podów i logi..."
     kubectl get pods -n davtrografanalokitempo
+    echo ""
+    print_step "Logi problematycznych podów:"
+    kubectl logs -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 --tail=20
+    echo ""
+    print_step "Events:"
+    kubectl get events -n davtrografanalokitempo --sort-by=.lastTimestamp | tail -10
 fi
 
-# Port-forward dla testów (używamy portu 8081 zamiast 8080)
-print_step "Uruchamianie port-forward do aplikacji (port 8081)..."
-kubectl port-forward svc/website-argocd-k8s-githubactions-kustomize-kyverno05-service -n davtrografanalokitempo 8081:80 &
-APP_PID=$!
+# Port-forward tylko jeśli aplikacja jest zdrowa
+if [ "$all_healthy" = true ]; then
+    print_step "Uruchamianie port-forward do aplikacji (port $APP_PORT)..."
+    kubectl port-forward svc/website-argocd-k8s-githubactions-kustomize-kyverno05-service -n davtrografanalokitempo $APP_PORT:80 &
+    APP_PID=$!
+    sleep 2
 
-print_step "Uruchamianie port-forward do monitoringu..."
-kubectl port-forward svc/grafana-service -n davtrografanalokitempo 3000:3000 &
-GRAFANA_PID=$!
-kubectl port-forward svc/prometheus-service -n davtrografanalokitempo 9090:9090 &
-PROMETHEUS_PID=$!
-kubectl port-forward svc/loki-service -n davtrografanalokitempo 3100:3100 &
-LOKI_PID=$!
-kubectl port-forward svc/tempo-service -n davtrografanalokitempo 3200:3200 &
-TEMPO_PID=$!
+    print_step "Uruchamianie port-forward do monitoringu..."
+    kubectl port-forward svc/grafana-service -n davtrografanalokitempo $GRAFANA_PORT:3000 &
+    GRAFANA_PID=$!
+    sleep 1
+    
+    kubectl port-forward svc/prometheus-service -n davtrografanalokitempo $PROMETHEUS_PORT:9090 &
+    PROMETHEUS_PID=$!
+    sleep 1
+    
+    kubectl port-forward svc/loki-service -n davtrografanalokitempo $LOKI_PORT:3100 &
+    LOKI_PID=$!
+    sleep 1
+    
+    kubectl port-forward svc/tempo-service -n davtrografanalokitempo $TEMPO_PORT:3200 &
+    TEMPO_PID=$!
+    sleep 1
 
-# Funkcja czyszczenia
-cleanup() {
+    # Funkcja czyszczenia
+    cleanup() {
+        echo ""
+        print_step "Zatrzymywanie port-forward..."
+        pkill -f "kubectl port-forward" || true
+        exit 0
+    }
+
+    trap cleanup SIGINT SIGTERM
+
     echo ""
-    print_step "Zatrzymywanie port-forward..."
-    pkill -f "kubectl port-forward"
-    exit 0
-}
+    print_success "DEPLOYMENT ZAKOŃCZONY!"
+    echo ""
+    echo "🌐 Dostęp do aplikacji:"
+    echo "   Aplikacja: http://localhost:$APP_PORT"
+    echo "   Metryki:   http://localhost:$APP_PORT/metrics"
+    echo "   Health:    http://localhost:$APP_PORT/health"
+    echo ""
+    echo "📊 Monitoring:"
+    echo "   Grafana:    http://localhost:$GRAFANA_PORT (admin/admin)"
+    echo "   Prometheus: http://localhost:$PROMETHEUS_PORT"
+    echo "   Loki:       http://localhost:$LOKI_PORT"
+    echo "   Tempo:      http://localhost:$TEMPO_PORT"
+    echo ""
+    echo "🛑 Aby zatrzymać port-forward, naciśnij Ctrl+C"
+else
+    print_error "Aplikacja nie jest zdrowa, pomijam port-forward"
+    echo "🔍 Sprawdź logi powyżej i napraw problemy przed ponownym uruchomieniem"
+    exit 1
+fi
 
-trap cleanup SIGINT SIGTERM
-
-echo ""
-print_success "DEPLOYMENT ZAKOŃCZONY!"
-echo ""
-echo "🌐 Dostęp do aplikacji:"
-echo "   Aplikacja: http://localhost:8081"
-echo "   Metryki:   http://localhost:8081/metrics"
-echo "   Health:    http://localhost:8081/health"
-echo ""
-echo "📊 Monitoring:"
-echo "   Grafana:    http://localhost:3000 (admin/admin)"
-echo "   Prometheus: http://localhost:9090"
-echo "   Loki:       http://localhost:3100"
-echo "   Tempo:      http://localhost:3200"
-echo ""
-echo "🛑 Aby zatrzymać port-forward, naciśnij Ctrl+C"
 echo ""
 echo "📋 Status podów:"
 kubectl get pods -n davtrografanalokitempo
+
+echo ""
+print_step "Testowanie aplikacji..."
+if curl -s http://localhost:$APP_PORT/health >/dev/null; then
+    print_success "Aplikacja działa poprawnie!"
+else
+    print_warning "Aplikacja nie odpowiada na health check, sprawdź logi"
+fi
 
 # Czekaj na sygnał zakończenia
 wait $APP_PID
@@ -1519,7 +1666,7 @@ git push -u origin main
 ## 📊 Monitoring
 
 - **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3000 (admin/admin)
+- **Grafana**: http://localhost:3001 (admin/admin)
 - **Loki**: http://localhost:3100
 - **Tempo**: http://localhost:3200
 
@@ -1621,8 +1768,8 @@ echo ""
 echo "🚀 Aplikacja będzie automatycznie deployowana przez ArgoCD!"
 echo ""
 echo "📊 Po deploymencie będziesz mieć dostęp do:"
-echo "   - Aplikacja: http://localhost:8081"
-echo "   - Grafana: http://localhost:3000 (admin/admin)"
+echo "   - Aplikacja: http://localhost:8081 (lub wyższy port jeśli zajęty)"
+echo "   - Grafana: http://localhost:3001 (admin/admin)"
 echo "   - Prometheus: http://localhost:9090"
 echo "   - Loki: http://localhost:3100"
 echo "   - Tempo: http://localhost:3200"

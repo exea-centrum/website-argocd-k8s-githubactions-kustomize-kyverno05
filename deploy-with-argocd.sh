@@ -14,7 +14,34 @@ print_success() { echo -e "${GREEN}✅${NC} $1"; }
 print_warning() { echo -e "${YELLOW}⚠️${NC} $1"; }
 print_error() { echo -e "${RED}❌${NC} $1"; }
 
+# Funkcja do sprawdzania wolnych portów
+find_free_port() {
+    local base_port=$1
+    local port=$base_port
+    while netstat -tuln | grep -q ":$port "; do
+        port=$((port + 1))
+        if [ $port -gt $((base_port + 20)) ]; then
+            echo $base_port
+            return
+        fi
+    done
+    echo $port
+}
+
 echo "🚀 Automatyczny deployment aplikacji przez ArgoCD..."
+
+# Znajdź wolne porty
+APP_PORT=$(find_free_port 8081)
+GRAFANA_PORT=$(find_free_port 3001)
+PROMETHEUS_PORT=9090  # Zwykle wolny
+LOKI_PORT=3100        # Zwykle wolny  
+TEMPO_PORT=3200       # Zwykle wolny
+
+print_step "Używanie portów: App:$APP_PORT, Grafana:$GRAFANA_PORT, Prometheus:$PROMETHEUS_PORT, Loki:$LOKI_PORT, Tempo:$TEMPO_PORT"
+
+# Zatrzymaj istniejące port-forward
+pkill -f "kubectl port-forward" || true
+sleep 2
 
 # Sprawdź czy ArgoCD jest dostępny
 if ! kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server &> /dev/null; then
@@ -56,70 +83,104 @@ fi
 print_step "Sprawdzanie statusu podów..."
 timeout=300
 counter=0
-all_running=false
+all_healthy=false
 
 while [ $counter -lt $timeout ]; do
-    RUNNING_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 2>/dev/null | grep Running | wc -l)
-    TOTAL_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 2>/dev/null | grep -v NAME | wc -l)
+    # Sprawdź czy wszystkie pody aplikacji są gotowe
+    READY_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 -o jsonpath='{range .items[*]}{.status.containerStatuses[?(@.ready==true)].ready}{"\n"}{end}' | grep -c true)
+    TOTAL_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 --no-headers | wc -l)
     
-    if [ "$RUNNING_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -ge 1 ]; then
-        all_running=true
-        print_success "Aplikacja uruchomiona!"
-        break
+    if [ "$READY_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -ge 1 ]; then
+        # Sprawdź czy aplikacja odpowiada na health check
+        POD_NAME=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 -o name | head -1 | cut -d'/' -f2)
+        if kubectl exec -n davtrografanalokitempo $POD_NAME -- wget -q -T 5 -O- http://localhost:8090/health >/dev/null 2>&1; then
+            all_healthy=true
+            print_success "Aplikacja uruchomiona i odpowiada!"
+            break
+        fi
     fi
     echo "⏳ Oczekiwanie na uruchomienie aplikacji... ($counter/$timeout)"
     sleep 10
     counter=$((counter + 10))
 done
 
-if [ "$all_running" = false ]; then
-    print_warning "Timeout - sprawdzam status podów..."
+if [ "$all_healthy" = false ]; then
+    print_warning "Timeout - sprawdzam status podów i logi..."
     kubectl get pods -n davtrografanalokitempo
+    echo ""
+    print_step "Logi problematycznych podów:"
+    kubectl logs -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 --tail=20
+    echo ""
+    print_step "Events:"
+    kubectl get events -n davtrografanalokitempo --sort-by=.lastTimestamp | tail -10
 fi
 
-# Port-forward dla testów (używamy portu 8081 zamiast 8080)
-print_step "Uruchamianie port-forward do aplikacji (port 8081)..."
-kubectl port-forward svc/website-argocd-k8s-githubactions-kustomize-kyverno05-service -n davtrografanalokitempo 8081:80 &
-APP_PID=$!
+# Port-forward tylko jeśli aplikacja jest zdrowa
+if [ "$all_healthy" = true ]; then
+    print_step "Uruchamianie port-forward do aplikacji (port $APP_PORT)..."
+    kubectl port-forward svc/website-argocd-k8s-githubactions-kustomize-kyverno05-service -n davtrografanalokitempo $APP_PORT:80 &
+    APP_PID=$!
+    sleep 2
 
-print_step "Uruchamianie port-forward do monitoringu..."
-kubectl port-forward svc/grafana-service -n davtrografanalokitempo 3000:3000 &
-GRAFANA_PID=$!
-kubectl port-forward svc/prometheus-service -n davtrografanalokitempo 9090:9090 &
-PROMETHEUS_PID=$!
-kubectl port-forward svc/loki-service -n davtrografanalokitempo 3100:3100 &
-LOKI_PID=$!
-kubectl port-forward svc/tempo-service -n davtrografanalokitempo 3200:3200 &
-TEMPO_PID=$!
+    print_step "Uruchamianie port-forward do monitoringu..."
+    kubectl port-forward svc/grafana-service -n davtrografanalokitempo $GRAFANA_PORT:3000 &
+    GRAFANA_PID=$!
+    sleep 1
+    
+    kubectl port-forward svc/prometheus-service -n davtrografanalokitempo $PROMETHEUS_PORT:9090 &
+    PROMETHEUS_PID=$!
+    sleep 1
+    
+    kubectl port-forward svc/loki-service -n davtrografanalokitempo $LOKI_PORT:3100 &
+    LOKI_PID=$!
+    sleep 1
+    
+    kubectl port-forward svc/tempo-service -n davtrografanalokitempo $TEMPO_PORT:3200 &
+    TEMPO_PID=$!
+    sleep 1
 
-# Funkcja czyszczenia
-cleanup() {
+    # Funkcja czyszczenia
+    cleanup() {
+        echo ""
+        print_step "Zatrzymywanie port-forward..."
+        pkill -f "kubectl port-forward" || true
+        exit 0
+    }
+
+    trap cleanup SIGINT SIGTERM
+
     echo ""
-    print_step "Zatrzymywanie port-forward..."
-    pkill -f "kubectl port-forward"
-    exit 0
-}
+    print_success "DEPLOYMENT ZAKOŃCZONY!"
+    echo ""
+    echo "🌐 Dostęp do aplikacji:"
+    echo "   Aplikacja: http://localhost:$APP_PORT"
+    echo "   Metryki:   http://localhost:$APP_PORT/metrics"
+    echo "   Health:    http://localhost:$APP_PORT/health"
+    echo ""
+    echo "📊 Monitoring:"
+    echo "   Grafana:    http://localhost:$GRAFANA_PORT (admin/admin)"
+    echo "   Prometheus: http://localhost:$PROMETHEUS_PORT"
+    echo "   Loki:       http://localhost:$LOKI_PORT"
+    echo "   Tempo:      http://localhost:$TEMPO_PORT"
+    echo ""
+    echo "🛑 Aby zatrzymać port-forward, naciśnij Ctrl+C"
+else
+    print_error "Aplikacja nie jest zdrowa, pomijam port-forward"
+    echo "🔍 Sprawdź logi powyżej i napraw problemy przed ponownym uruchomieniem"
+    exit 1
+fi
 
-trap cleanup SIGINT SIGTERM
-
-echo ""
-print_success "DEPLOYMENT ZAKOŃCZONY!"
-echo ""
-echo "🌐 Dostęp do aplikacji:"
-echo "   Aplikacja: http://localhost:8081"
-echo "   Metryki:   http://localhost:8081/metrics"
-echo "   Health:    http://localhost:8081/health"
-echo ""
-echo "📊 Monitoring:"
-echo "   Grafana:    http://localhost:3000 (admin/admin)"
-echo "   Prometheus: http://localhost:9090"
-echo "   Loki:       http://localhost:3100"
-echo "   Tempo:      http://localhost:3200"
-echo ""
-echo "🛑 Aby zatrzymać port-forward, naciśnij Ctrl+C"
 echo ""
 echo "📋 Status podów:"
 kubectl get pods -n davtrografanalokitempo
+
+echo ""
+print_step "Testowanie aplikacji..."
+if curl -s http://localhost:$APP_PORT/health >/dev/null; then
+    print_success "Aplikacja działa poprawnie!"
+else
+    print_warning "Aplikacja nie odpowiada na health check, sprawdź logi"
+fi
 
 # Czekaj na sygnał zakończenia
 wait $APP_PID
