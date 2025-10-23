@@ -691,7 +691,7 @@ metadata:
     version: v1
 EOF
 
-# Deployment - POPRAWIONE (z health checks)
+# Deployment - POPRAWIONE (z health checks i poprawnym init container)
 cat > manifests/base/deployment.yaml << EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -724,11 +724,19 @@ spec:
         - sh
         - -c
         - |
-          until pg_isready -h postgres-service -p 5432 -U davtro; do
-            echo "Waiting for database...";
+          # Najpierw czekaj na serwer PostgreSQL
+          until pg_isready -h postgres-service -p 5432; do
+            echo "Waiting for PostgreSQL server...";
             sleep 2;
           done;
-          echo "Database is ready!"
+          
+          # Potem czekaj aż baza davtro_db będzie dostępna
+          until PGPASSWORD=password123 psql -h postgres-service -U davtro -d davtro_db -c "SELECT 1;" >/dev/null 2>&1; do
+            echo "Waiting for database davtro_db to be ready...";
+            sleep 2;
+          done;
+          
+          echo "Database davtro_db is ready!"
         env:
         - name: PGPASSWORD
           value: "password123"
@@ -754,13 +762,13 @@ spec:
           httpGet:
             path: /health
             port: 8090
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
             port: 8090
-          initialDelaySeconds: 5
+          initialDelaySeconds: 30
           periodSeconds: 5
         resources:
           requests:
@@ -818,7 +826,7 @@ spec:
               number: 80
 EOF
 
-# PostgreSQL - POPRAWIONE (z PersistentVolume)
+# PostgreSQL - POPRAWIONE (z PVC i poprawnymi etykietami)
 cat > manifests/base/postgres.yaml << EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -827,7 +835,6 @@ metadata:
   namespace: $NAMESPACE
   labels:
     app: postgres
-    version: v1
 spec:
   replicas: 1
   selector:
@@ -837,7 +844,6 @@ spec:
     metadata:
       labels:
         app: postgres
-        version: v1
     spec:
       containers:
       - name: postgres
@@ -873,7 +879,6 @@ metadata:
   namespace: $NAMESPACE
   labels:
     app: postgres
-    version: v1
 spec:
   selector:
     app: postgres
@@ -1319,7 +1324,7 @@ EOF
 
 chmod +x setup-ghcr-secret.sh
 
-# 9. Skrypt automatycznego deploymentu - POPRAWIONY (z dynamicznymi portami)
+# 9. Skrypt automatycznego deploymentu - POPRAWIONY (z dynamicznymi portami i lepszą diagnostyką)
 print_step "Tworzenie skryptu automatycznego deploymentu..."
 
 cat > deploy-with-argocd.sh << 'EOF'
@@ -1411,11 +1416,14 @@ counter=0
 all_healthy=false
 
 while [ $counter -lt $timeout ]; do
-    # Sprawdź czy wszystkie pody aplikacji są gotowe
+    # Sprawdź czy PostgreSQL działa
+    POSTGRES_READY=$(kubectl get pods -n davtrografanalokitempo -l app=postgres -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null || echo "false")
+    
+    # Sprawdź czy aplikacja działa
     READY_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 -o jsonpath='{range .items[*]}{.status.containerStatuses[?(@.ready==true)].ready}{"\n"}{end}' | grep -c true)
     TOTAL_PODS=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 --no-headers | wc -l)
     
-    if [ "$READY_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -ge 1 ]; then
+    if [ "$POSTGRES_READY" = "true" ] && [ "$READY_PODS" -eq "$TOTAL_PODS" ] && [ "$TOTAL_PODS" -ge 1 ]; then
         # Sprawdź czy aplikacja odpowiada na health check
         POD_NAME=$(kubectl get pods -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 -o name | head -1 | cut -d'/' -f2)
         if kubectl exec -n davtrografanalokitempo $POD_NAME -- wget -q -T 5 -O- http://localhost:8090/health >/dev/null 2>&1; then
@@ -1424,7 +1432,7 @@ while [ $counter -lt $timeout ]; do
             break
         fi
     fi
-    echo "⏳ Oczekiwanie na uruchomienie aplikacji... ($counter/$timeout)"
+    echo "⏳ Oczekiwanie na uruchomienie... PostgreSQL: $POSTGRES_READY, App: $READY_PODS/$TOTAL_PODS ($counter/$timeout)"
     sleep 10
     counter=$((counter + 10))
 done
@@ -1433,8 +1441,11 @@ if [ "$all_healthy" = false ]; then
     print_warning "Timeout - sprawdzam status podów i logi..."
     kubectl get pods -n davtrografanalokitempo
     echo ""
-    print_step "Logi problematycznych podów:"
+    print_step "Logi aplikacji:"
     kubectl logs -n davtrografanalokitempo -l app=website-argocd-k8s-githubactions-kustomize-kyverno05 --tail=20
+    echo ""
+    print_step "Logi PostgreSQL:"
+    kubectl logs -n davtrografanalokitempo -l app=postgres --tail=10
     echo ""
     print_step "Events:"
     kubectl get events -n davtrografanalokitempo --sort-by=.lastTimestamp | tail -10

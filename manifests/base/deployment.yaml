@@ -29,11 +29,19 @@ spec:
         - sh
         - -c
         - |
-          until pg_isready -h postgres-service -p 5432 -U davtro; do
-            echo "Waiting for database...";
+          # Najpierw czekaj na serwer PostgreSQL
+          until pg_isready -h postgres-service -p 5432; do
+            echo "Waiting for PostgreSQL server...";
             sleep 2;
           done;
-          echo "Database is ready!"
+          
+          # Potem czekaj aż baza davtro_db będzie dostępna
+          until PGPASSWORD=password123 psql -h postgres-service -U davtro -d davtro_db -c "SELECT 1;" >/dev/null 2>&1; do
+            echo "Waiting for database davtro_db to be ready...";
+            sleep 2;
+          done;
+          
+          echo "Database davtro_db is ready!"
         env:
         - name: PGPASSWORD
           value: "password123"
@@ -59,13 +67,13 @@ spec:
           httpGet:
             path: /health
             port: 8090
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
             port: 8090
-          initialDelaySeconds: 5
+          initialDelaySeconds: 30
           periodSeconds: 5
         resources:
           requests:
