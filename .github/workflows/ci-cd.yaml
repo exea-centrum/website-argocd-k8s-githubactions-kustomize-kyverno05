@@ -2,7 +2,7 @@ name: CI - build & update kustomize
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
     paths-ignore:
       - "manifests/production/**"
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GHCR_PAT }}
 
       - name: Ensure static directory exists
         run: |
@@ -58,7 +58,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Build and push image
         uses: docker/build-push-action@v4
