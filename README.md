@@ -104,3 +104,12 @@ kubectl get applications -n argocd
 kubectl delete -f argocd/application.yaml
 kubectl delete namespace davtrografanalokitempo
 ```
+
+# opcja dla kompletnie leniwych
+
+```bash
+chmod +x dav.sh
+./dav.sh
+# w github dodaj GITHUB_TOKEN do projektu
+# i w ArgoCD dodaj zawrtość application.yaml a ArgoCD ogarnie.
+```
