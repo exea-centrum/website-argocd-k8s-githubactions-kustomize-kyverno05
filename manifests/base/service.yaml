@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: website-argocd-k8s-githubactions-kustomize-kyverno05-service
+  namespace: davtrografanalokitempo
+  labels:
+    app: website-argocd-k8s-githubactions-kustomize-kyverno05
+    version: v1
+spec:
+  selector:
+    app: website-argocd-k8s-githubactions-kustomize-kyverno05
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP

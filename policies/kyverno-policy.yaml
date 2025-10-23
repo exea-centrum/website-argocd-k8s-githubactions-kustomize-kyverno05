@@ -1,0 +1,70 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-labels
+spec:
+  validationFailureAction: enforce
+  rules:
+  - name: check-for-labels
+    match:
+      any:
+      - resources:
+          kinds:
+          - Deployment
+          - Service
+          - Ingress
+    validate:
+      message: "The labels 'app' and 'version' are required."
+      pattern:
+        metadata:
+          labels:
+            app: "?*"
+            version: "?*"
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: block-default-namespace
+spec:
+  validationFailureAction: enforce
+  rules:
+  - name: block-default-namespace
+    match:
+      any:
+      - resources:
+          kinds:
+          - Pod
+          - Deployment
+          - Service
+          namespaces:
+          - default
+    validate:
+      message: "Resources cannot be deployed in the default namespace."
+      deny: {}
+
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+spec:
+  validationFailureAction: enforce
+  rules:
+  - name: check-resource-limits
+    match:
+      any:
+      - resources:
+          kinds:
+          - Deployment
+    validate:
+      message: "CPU and memory limits are required."
+      pattern:
+        spec:
+          template:
+            spec:
+              containers:
+              - resources:
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"

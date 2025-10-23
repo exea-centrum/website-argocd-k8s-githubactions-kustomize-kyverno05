@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: website-argocd-k8s-githubactions-kustomize-kyverno05-ingress
+  namespace: davtrografanalokitempo
+  labels:
+    app: website-argocd-k8s-githubactions-kustomize-kyverno05
+    version: v1
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: website-argocd-k8s-githubactions-kustomize-kyverno05.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: website-argocd-k8s-githubactions-kustomize-kyverno05-service
+            port:
+              number: 80

@@ -1,0 +1,16 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: website-argocd-k8s-githubactions-kustomize-kyverno05-monitor
+  namespace: davtrografanalokitempo
+  labels:
+    app: website-argocd-k8s-githubactions-kustomize-kyverno05
+    version: v1
+spec:
+  selector:
+    matchLabels:
+      app: website-argocd-k8s-githubactions-kustomize-kyverno05
+  endpoints:
+  - port: "http"
+    path: /metrics
+    interval: 30s

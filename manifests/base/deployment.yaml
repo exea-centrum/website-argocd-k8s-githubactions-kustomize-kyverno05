@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: website-argocd-k8s-githubactions-kustomize-kyverno05
+  namespace: davtrografanalokitempo
+  labels:
+    app: website-argocd-k8s-githubactions-kustomize-kyverno05
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: website-argocd-k8s-githubactions-kustomize-kyverno05
+  template:
+    metadata:
+      labels:
+        app: website-argocd-k8s-githubactions-kustomize-kyverno05
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: website-argocd-k8s-githubactions-kustomize-kyverno05-sa
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres-service 5432; do echo waiting for database; sleep 2; done; echo Database is ready!']
+      containers:
+      - name: website
+        image: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: DB_HOST
+          value: "postgres-service"
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_USER
+          value: "davtro"
+        - name: DB_PASSWORD
+          value: "password123"
+        - name: DB_NAME
+          value: "davtro_db"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"

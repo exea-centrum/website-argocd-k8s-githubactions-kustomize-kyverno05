@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Davtro Website <span class="status-badge">Live</span></h1>
+            <p>Monitoring enabled with Prometheus, Grafana, Loki, and Tempo | Powered by ArgoCD + K8s + GitHub Actions</p>
+        </div>
+
+        <h2>📊 Scraped Data</h2>
+        <div class="data-grid">
+        {{range .Data}}
+            <div class="data-item">
+                <h3>{{.Title}}</h3>
+                <p>{{.Content}}</p>
+                <div class="timestamp">🕒 Created: {{.Created.Format "2006-01-02 15:04:05"}}</div>
+            </div>
+        {{else}}
+            <div class="data-item" style="grid-column: 1 / -1; text-align: center;">
+                <h3>No data available</h3>
+                <p>Data will appear here once scraped from the source website.</p>
+            </div>
+        {{end}}
+        </div>
+
+        <div class="nav-links">
+            <a href="/api/data">📡 JSON API</a> 
+            <a href="/metrics">📈 Metrics</a> 
+            <a href="/health">❤️ Health Check</a>
+        </div>
+    </div>
+</body>
+</html>

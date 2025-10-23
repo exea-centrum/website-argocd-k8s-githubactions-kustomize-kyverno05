@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: website-argocd-k8s-githubactions-kustomize-kyverno05-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05.git
+    targetRevision: HEAD
+    path: manifests/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: davtrografanalokitempo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    jsonPointers:
+    - /spec/replicas

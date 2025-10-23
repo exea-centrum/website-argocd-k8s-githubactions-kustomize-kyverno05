@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: davtrografanalokitempo
+
+resources:
+  - ../base
+  - ../../monitoring/monitoring-namespace.yaml
+  - ../../monitoring/prometheus.yaml
+  - ../../monitoring/grafana.yaml
+  - ../../monitoring/loki.yaml
+  - ../../monitoring/tempo.yaml
+
+images:
+  - name: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
+    newName: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
+    newTag: latest
