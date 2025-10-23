@@ -17,4 +17,4 @@ images:
   newTag: latest
 - name: website-argocd-k8s-githubactions-kustomize-kyverno05
   newName: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
-  newTag: c15d3086449aa252b3ee63ef104e9fcbefbca4ab
+  newTag: 0a5e838ff0031355dda2a3a391d0a82dd419c05a
