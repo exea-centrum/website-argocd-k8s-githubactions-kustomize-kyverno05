@@ -30,12 +30,14 @@ website-argocd-k8s-githubactions-kustomize-kyverno05/
 ## 🚀 Szybki Deployment
 
 ### 1. Utwórz repozytorium GitHub
+
 ```bash
 # Utwórz puste repozytorium: https://github.com/new
 # Nazwa: website-argocd-k8s-githubactions-kustomize-kyverno05
 ```
 
 ### 2. Inicjalizacja projektu
+
 ```bash
 git add .
 git commit -m "Initial commit: Full DevOps pipeline with monitoring"
@@ -44,6 +46,7 @@ git push -u origin main
 ```
 
 ### 3. Automatyczny deployment
+
 ```bash
 # Skonfiguruj secret GHCR
 ./setup-ghcr-secret.sh <github-username> <token>
@@ -55,14 +58,16 @@ git push -u origin main
 ## 🔧 Konfiguracja
 
 ### Zmienne środowiskowe
+
 - `DB_HOST`: Host PostgreSQL
-- `DB_PORT`: Port PostgreSQL  
+- `DB_PORT`: Port PostgreSQL
 - `DB_USER`: Użytkownik bazy
 - `DB_PASSWORD`: Hasło bazy
 - `DB_NAME`: Nazwa bazy
 - `PORT`: Port aplikacji (8090)
 
 ### Endpointy
+
 - `/`: Strona główna
 - `/health`: Health check
 - `/metrics`: Metryki Prometheus
@@ -78,6 +83,7 @@ git push -u origin main
 ## 🔒 Bezpieczeństwo
 
 Polityki Kyverno:
+
 - Wymagane etykiety na zasobach
 - Blokada namespace `default`
 - Wymagane limity zasobów
