@@ -4,14 +4,17 @@ kind: Kustomization
 namespace: davtrografanalokitempo
 
 resources:
-  - ../base
-  - monitoring/prometheus.yaml
-  - monitoring/grafana.yaml
-  - monitoring/loki.yaml
-  - monitoring/tempo-config.yaml
-  - monitoring/tempo.yaml
+- ../base
+- monitoring/prometheus.yaml
+- monitoring/grafana.yaml
+- monitoring/loki.yaml
+- monitoring/tempo-config.yaml
+- monitoring/tempo.yaml
 
 images:
-  - name: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
-    newName: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
-    newTag: latest
+- name: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
+  newName: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
+  newTag: latest
+- name: website-argocd-k8s-githubactions-kustomize-kyverno05
+  newName: ghcr.io/exea-centrum/website-argocd-k8s-githubactions-kustomize-kyverno05
+  newTag: 4a69d39cd7ce2731e067a5f5ee4dbb401a53429b
